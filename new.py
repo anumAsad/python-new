@@ -1,4 +1,7 @@
 import streamlit as st
+import pandas as pd
+import datetime
+import io
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 
@@ -25,39 +28,47 @@ goal = st.text_area("Your goal for tomorrow?")
 # Save Data
 if st.button("Save Progress"):
     st.session_state.progress_data.append({
-        "date": str(date),
-        "learning": learning,
-        "challenge": challenge,
-        "goal": goal
+        "Date": date.strftime("%Y-%m-%d"),
+        "Learning": learning,
+        "Challenge": challenge,
+        "Goal": goal
     })
     st.success("Progress saved!")
 
 # Show Progress Data
 if st.session_state.progress_data:
     st.subheader("📊 Progress Summary")
-    for entry in st.session_state.progress_data:
-        st.write(f"📅 **{entry['date']}**")
-        st.write(f"✅ **Learned:** {entry['learning']}")
-        st.write(f"⚠️ **Challenge:** {entry['challenge']}")
-        st.write(f"🎯 **Next Goal:** {entry['goal']}")
-        st.write("---")
+    progress_df = pd.DataFrame(st.session_state.progress_data)
+
+    st.dataframe(progress_df)
+
+    # Generate CSV
+    csv_data = progress_df.to_csv(index=False).encode('utf-8')
+    st.download_button("📥 Download CSV", data=csv_data, file_name=f"{name}_progress.csv", mime="text/csv")
+
+    # Generate Excel
+    excel_buffer = io.BytesIO()
+    with pd.ExcelWriter(excel_buffer, engine="xlsxwriter") as writer:
+        progress_df.to_excel(writer, index=False, sheet_name="Progress")
+    excel_buffer.seek(0)
+    st.download_button("📥 Download Excel", data=excel_buffer, file_name=f"{name}_progress.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     # Generate PDF Report
     if st.button("📄 Generate PDF Report"):
-        pdf_path = f"{name}_progress_report.pdf"
-        c = canvas.Canvas(pdf_path, pagesize=letter)
+        pdf_buffer = io.BytesIO()
+        c = canvas.Canvas(pdf_buffer, pagesize=letter)
         c.drawString(100, 750, f"Student Progress Report - {name}")
         c.drawString(100, 730, f"Grade: {grade}")
         c.drawString(100, 710, f"Subject: {subject}")
 
         y = 690
         for entry in st.session_state.progress_data:
-            c.drawString(100, y, f"{entry['date']}:")
-            c.drawString(120, y - 20, f"Learned: {entry['learning']}")
-            c.drawString(120, y - 40, f"Challenge: {entry['challenge']}")
-            c.drawString(120, y - 60, f"Goal: {entry['goal']}")
+            c.drawString(100, y, f"{entry['Date']}:")
+            c.drawString(120, y - 20, f"Learned: {entry['Learning']}")
+            c.drawString(120, y - 40, f"Challenge: {entry['Challenge']}")
+            c.drawString(120, y - 60, f"Goal: {entry['Goal']}")
             y -= 100  # Move down for next entry
-        
+
         c.save()
-        st.success(f"PDF Report Saved: {pdf_path}")
-        st.download_button("📥 Download Report", open(pdf_path, "rb"), file_name=pdf_path)
+        pdf_buffer.seek(0)
+        st.download_button("📥 Download PDF", data=pdf_buffer, file_name=f"{name}_progress.pdf", mime="application/pdf")
